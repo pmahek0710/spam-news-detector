@@ -1,70 +1,45 @@
-# retrain_and_app.py
 import pandas as pd
+import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-import pickle
 import streamlit as st
 
-# -------------------------------
-# 1️⃣ LOAD DATASET
-# -------------------------------
-st.title("Spam News Detection")  # Your app title
+# ----------------------------------------------------
+# 1. Relative path for dataset (news.csv must be in the same folder as this script)
+df = pd.read_csv("news.csv")  # <-- relative path, do NOT use absolute path
 
-# Update path to your Downloads folder
-DATA_PATH = r"C:\Users\pmahe\Downloads\news.csv"
-
-try:
-    df = pd.read_csv(DATA_PATH)
-    st.success(f"Dataset loaded! Rows: {len(df)}")
-except FileNotFoundError:
-    st.error(f"Dataset not found! Make sure {DATA_PATH} exists.")
-    st.stop()
-
-# -------------------------------
-# 2️⃣ CLEAN DATA
-# -------------------------------
-# Keep only text and label
-df = df[['text', 'label']].dropna()
-df['label'] = df['label'].str.strip().str.upper()  # Ensure uniform labels
-
-# -------------------------------
-# 3️⃣ VECTORIZE & TRAIN MODEL
-# -------------------------------
-vectorizer = TfidfVectorizer(
-    max_features=10000,
-    stop_words='english',
-    ngram_range=(1,2)
-)
-
-X = vectorizer.fit_transform(df['text'])
+# 2. Prepare features and labels
+X = df['text']
 y = df['label']
 
-model = LogisticRegression(max_iter=1000)
-model.fit(X, y)
+# 3. Vectorizer & Model training
+vectorizer = TfidfVectorizer(stop_words='english')
+X_vec = vectorizer.fit_transform(X)
 
-# Save model & vectorizer
-pickle.dump(model, open(r"C:\Users\pmahe\Downloads\model.pkl", "wb"))
-pickle.dump(vectorizer, open(r"C:\Users\pmahe\Downloads\vectorizer.pkl", "wb"))
+model = LogisticRegression()
+model.fit(X_vec, y)
 
-st.success("✅ Model trained and saved successfully!")
+# 4. Save model and vectorizer
+with open("model.pkl", "wb") as f:
+    pickle.dump(model, f)
+with open("vectorizer.pkl", "wb") as f:
+    pickle.dump(vectorizer, f)
 
-# -------------------------------
-# 4️⃣ STREAMLIT APP FOR TESTING
-# -------------------------------
-st.subheader("Test Your News")
+# 5. Streamlit app
+st.title("Spam News Detection 📰")
 
-news_input = st.text_area("Enter news text here:")
+user_input = st.text_area("Enter news text:")
 
-if st.button("Check News"):
-    if news_input.strip() == "":
-        st.warning("Please enter some news text!")
+if st.button("Predict"):
+    if user_input.strip() != "":
+        # Load vectorizer and model
+        with open("vectorizer.pkl", "rb") as f:
+            vec = pickle.load(f)
+        with open("model.pkl", "rb") as f:
+            mdl = pickle.load(f)
+        # Transform input
+        user_vec = vec.transform([user_input])
+        prediction = mdl.predict(user_vec)[0]
+        st.success(f"Prediction: {prediction}")
     else:
-        # Load saved model & vectorizer
-        model = pickle.load(open(r"C:\Users\pmahe\Downloads\model.pkl", "rb"))
-        vectorizer = pickle.load(open(r"C:\Users\pmahe\Downloads\vectorizer.pkl", "rb"))
-
-        news_vector = vectorizer.transform([news_input])
-        pred = model.predict(news_vector)[0]
-
-        label = "REAL" if pred == "REAL" else "FAKE"
-        st.write(f"Prediction: 🚨 {label} News!")
+        st.warning("Please enter some text.")
